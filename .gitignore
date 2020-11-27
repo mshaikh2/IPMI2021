@@ -1,0 +1,7 @@
+code/__pycache__/*
+code/.ipynb_checkpoints/*
+code/misc/__pycache__/*
+tensorboard/*
+output/*
+data/*
+checkpoints/*
