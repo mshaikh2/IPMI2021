@@ -1,18 +1,19 @@
 #### used in main project, do not change ####
 class Config(object):
     def __init__(self):
-        self.DATASET_NAME = 'OpenI'
+        self.DATASET_NAME = 'MIMIC'
         self.CUDA = True
         self.snapshot_interval = 10
         self.text_encoder_path = ''
         self.CONFIG_NAME = 'test'
         self.DATA_DIR = '../'
         self.TRAIN = True
-        self.GPU_ID = 1
+        self.GPU_ID = 3
         self.GAMMA1 = 4.0
         self.GAMMA2 = 5.0
         self.GAMMA3 = 10.0
         self.clip_max_norm = 1.0
+        self.max_length = 320
         # Learning Rates
         self.lr_backbone = 0
         self.lr = 5e-5
@@ -45,7 +46,7 @@ class Config(object):
         self.hidden_dim = 512
         self.pad_token_id = 0
         self.max_position_embeddings = 512
-        self.max_length = 160
+        
         self.layer_norm_eps = 1e-12
         self.dropout = 0.1
         self.vocab_size = 30522
