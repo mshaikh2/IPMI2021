@@ -13,8 +13,8 @@ from PIL import Image
 import spacy
 import scispacy
 from tqdm import tqdm 
-from nltk.tokenize import RegexpTokenizer
-from transformers import BertTokenizer
+# from nltk.tokenize import RegexpTokenizer
+# from transformers import BertTokenizer
 
 
 # nlp = spacy.load('en_core_sci_md')
@@ -117,43 +117,47 @@ class MimicDataset(Dataset):
 
         try:
             image = Image.open(image_path)
-            if image.size[0]<2048 or image.size[1]<2048:
+            
+            if image.size[0] < MAX_DIM or image.size[1] < MAX_DIM:
                 image = tv.transforms.Resize(MAX_DIM)(image)
                 # print(image.size,':', self.datadict[uid]['filenames'])
 
             if self.transform:
                 image = self.transform(image)
 
-            max_len_array = np.zeros(self.max_length, dtype='int')
-            cap_mask = np.zeros(self.max_length, dtype='int')
-            caption = np.array(self.datadict[uid]['token_ids'])
-            if len(caption)<=self.max_length:
-                cap_mask[:len(caption)] = 1
-                max_len_array[:len(caption)] = caption
-            else:
-                cap_mask[:] = 1
-                max_len_array = caption[:self.max_length]
-                max_len_array[-1] = self.__sep_id__
-    #         caption = normalize_report(caption)['sentences']
-    #         caption_encoded = self.tokenizer.encode_plus(
-    #                                     caption, max_length=self.max_length, padding='max_length', 
-    #                                     return_attention_mask=True, return_token_type_ids=False, truncation=True)
-
-    #         caption = np.array(caption_encoded['input_ids'])
-    #         cap_mask = np.array(caption_encoded['attention_mask']).astype(bool)
-            caption = max_len_array
-            cap_mask = cap_mask.astype(bool)
-            cap_lens = cap_mask.sum(-1)
-            return image, caption, cap_mask, uid, cap_lens
         except Exception as ex:
             print(ex)
             print(image_path)
-            pass
+            return None ## return None, collate_fn will ignore this broken sample
+        
+        max_len_array = np.zeros(self.max_length, dtype='int')
+        cap_mask = np.zeros(self.max_length, dtype='int')
+        caption = np.array(self.datadict[uid]['token_ids'])
+        if len(caption)<=self.max_length:
+            cap_mask[:len(caption)] = 1
+            max_len_array[:len(caption)] = caption
+        else:
+            cap_mask[:] = 1
+            max_len_array = caption[:self.max_length]
+            max_len_array[-1] = self.__sep_id__
+#         caption = normalize_report(caption)['sentences']
+#         caption_encoded = self.tokenizer.encode_plus(
+#                                     caption, max_length=self.max_length, padding='max_length', 
+#                                     return_attention_mask=True, return_token_type_ids=False, truncation=True)
+
+#         caption = np.array(caption_encoded['input_ids'])
+#         cap_mask = np.array(caption_encoded['attention_mask']).astype(bool)
+        caption = max_len_array
+        cap_mask = cap_mask.astype(bool)
+        cap_lens = cap_mask.sum(-1)
+        return image , caption, cap_mask, uid, cap_lens
+        
+
 
 def build_dataset(mode='train', cfg=None):
     data_dir = '/media/MyDataStor2/MIMIC-CXR/'
     img_dir = os.path.join(data_dir, 'physionet.org/files/', 'mimic-cxr-jpg/2.0.0/')
-    with open(os.path.join(data_dir,'lm_reports/mimic_dataset.pkl'),'rb') as f:
+    with open(os.path.join(data_dir,'lm_reports/mimic_dataset_mit_normalized.pkl'),'rb') as f:
         dataset = pickle.load(f)
     if mode == 'train':
         data = MimicDataset(img_dir, dataset, 

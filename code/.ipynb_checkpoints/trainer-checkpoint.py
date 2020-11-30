@@ -32,8 +32,8 @@ from tqdm import tqdm
 import timeit
 # from catr.engine import train_one_epoch, evaluate
 from misc.config import Config
-from transformers import BertConfig,BertTokenizer
-from nltk.tokenize import RegexpTokenizer
+from transformers import BertConfig #, BertTokenizer
+# from nltk.tokenize import RegexpTokenizer
 
 
 cfg = Config() # initialize catr config here
@@ -41,59 +41,6 @@ cfg = Config() # initialize catr config here
 # retokenizer = BertTokenizer.from_pretrained("catr/damsm_vocab.txt", do_lower=True)
 # # reg_tokenizer = RegexpTokenizer(r'\w+')
 # frozen_list_image_encoder = ['Conv2d_1a_3x3','Conv2d_2a_3x3','Conv2d_2b_3x3','Conv2d_3b_1x1','Conv2d_4a_3x3']
-
-# @torch.no_grad()
-# def evaluate(cnn_model, trx_model, cap_model, batch_size, cap_criterion, dataloader_val):
-#     cnn_model.eval()
-#     trx_model.eval()
-#     cap_model.eval() ### 
-#     s_total_loss = 0
-#     w_total_loss = 0
-#     c_total_loss = 0 ###
-#     ### add caption criterion here. #####
-# #     cap_criterion = torch.nn.CrossEntropyLoss() # add caption criterion here
-#     labels = torch.LongTensor(range(batch_size)) # used for matching loss
-#     if cfg.CUDA:
-#         labels = labels.cuda()
-# #         cap_criterion = cap_criterion.cuda() # add caption criterion here
-# #     cap_criterion.eval()
-#     #####################################
-
-#     val_data_iter = iter(dataloader_val)
-#     for step in tqdm(range(len(val_data_iter)),leave=False):
-#         data = val_data_iter.next()
-
-#         real_imgs, captions, cap_lens, class_ids, keys, cap_imgs, cap_img_masks, sentences, sent_masks = prepare_data(data)
-
-#         words_features, sent_code = cnn_model(cap_imgs)
-
-#         words_emb, sent_emb = trx_model(captions)
-
-#         ##### add catr here #####
-#         cap_preds = cap_model(words_features, cap_img_masks, sentences[:, :-1], sent_masks[:, :-1]) # caption model feedforward
-
-#         cap_loss = caption_loss(cap_criterion, cap_preds, sentences)
-
-#         c_total_loss += cap_loss.item()
-#         #########################
-
-#         w_loss0, w_loss1, attn = words_loss(words_features, words_emb, labels,
-#                                             cap_lens, class_ids, batch_size)
-#         w_total_loss += (w_loss0 + w_loss1).item()
-
-#         s_loss0, s_loss1 = \
-#             sent_loss(sent_code, sent_emb, labels, class_ids, batch_size)
-#         s_total_loss += (s_loss0 + s_loss1).item()
-
-# #             if step == 50:
-# #                 break
-
-#     s_cur_loss = s_total_loss / step
-#     w_cur_loss = w_total_loss / step
-#     c_cur_loss = c_total_loss / step
-
-#     return s_cur_loss, w_cur_loss, c_cur_loss
-
             
 # ################# Joint Image Text Representation (JoImTeR) learning task############################ #
 class JoImTeR(object):
@@ -117,7 +64,7 @@ class JoImTeR(object):
         self.num_batches = len(self.data_loader)
         self.bert_config = BertConfig(vocab_size=data_loader.dataset.vocab_size, hidden_size=512, num_hidden_layers=3,
                     num_attention_heads=8, intermediate_size=2048, hidden_act='gelu',
-                    hidden_dropout_prob=0.5, attention_probs_dropout_prob=0.5,
+                    hidden_dropout_prob=cfg.hidden_dropout_prob, attention_probs_dropout_prob=cfg.attention_probs_dropout_prob,
                     max_position_embeddings=512, layer_norm_eps=1e-12,
                     initializer_range=0.02, type_vocab_size=2, pad_token_id=0)
 
@@ -134,9 +81,7 @@ class JoImTeR(object):
             else:
                 image_encoder.load_state_dict(state_dict)
         for p in image_encoder.parameters(): # make image encoder grad on
-            p.requires_grad = True
-   
-        
+            p.requires_grad = True 
 #         image_encoder.eval()
         epoch = 0
         
@@ -192,8 +137,6 @@ class JoImTeR(object):
             state_dict = torch.load(cfg.text_encoder_path,map_location='cpu')
             optimizerT.load_state_dict(state_dict['optimizer'])
             lr_schedulerT.load_state_dict(state_dict['lr_scheduler'])
-        
-       
         ###############################################################
 
         return (optimizerI
@@ -201,13 +144,13 @@ class JoImTeR(object):
                 , lr_schedulerI
                 , lr_schedulerT)
 
-    def prepare_labels(self):
-        batch_size = self.batch_size
-        match_labels = Variable(torch.LongTensor(range(batch_size)))
-        if cfg.CUDA:
-            match_labels = match_labels.cuda()
+#     def prepare_labels(self, batch_size):
+# #         batch_size = self.batch_size
+#         match_labels = Variable(torch.LongTensor(range(batch_size)))
+#         if cfg.CUDA:
+#             match_labels = match_labels.cuda()
 
-        return match_labels
+#         return match_labels
 
     def save_model(self, image_encoder, text_encoder, optimizerI, optimizerT, lr_schedulerI, lr_schedulerT, epoch):
        
@@ -245,7 +188,15 @@ class JoImTeR(object):
         
         ####### init models ########
         text_encoder, image_encoder, start_epoch, = self.build_models()
-        labels = Variable(torch.LongTensor(range(self.batch_size))) # used for matching loss
+        
+        ##### init data #############################
+        ## due to the broken image collate_fn, batch size could change. Move this inside step loop
+#         labels = Variable(torch.LongTensor(range(self.batch_size))) # used for matching loss
+#         if cfg.CUDA:
+#             labels = labels.cuda()
+#         batch_size = self.batch_size
+#         match_labels = self.prepare_labels() # deprecated.
+        ##################################################################
         
         text_encoder.train()
         image_encoder.train()
@@ -255,21 +206,7 @@ class JoImTeR(object):
         ###### init optimizers #####
         optimizerI, optimizerT, lr_schedulerI, lr_schedulerT = self.define_optimizers(image_encoder, text_encoder)
         ############################################
-        
-        ##### init data #############################
-        
-        match_labels = self.prepare_labels()
 
-        batch_size = self.batch_size
-        ##################################################################
-        
-        
-        
-        ###### init caption model criterion ############
-        if cfg.CUDA:
-            labels = labels.cuda()
-        #################################################
-        
         tensorboard_step = 0
         gen_iterations = 0
         # gen_iterations = start_epoch * self.num_batches
@@ -278,9 +215,8 @@ class JoImTeR(object):
 #         print('LAMBDA_GEN:{0},LAMBDA_CAP:{1},LAMBDA_FT:{2},LAMBDA_FI:{3},LAMBDA_DAMSM:{4}'.format(cfg.TRAIN.SMOOTH.LAMBDA_GEN
 #                                                                                                   ,cfg.TRAIN.SMOOTH.LAMBDA_CAP
 #                                                                                                   ,cfg.TRAIN.SMOOTH.LAMBDA_FT
-#                                                                                                   ,cfg.TRAIN.SMOOTH.LAMBDA_FI                                                                                                  
-#                                                                                                   ,cfg.TRAIN.SMOOTH.LAMBDA_DAMSM))
-        
+#                                                                                                   ,cfg.TRAIN.SMOOTH.LAMBDA_FI                           
+#                                                                                                   ,cfg.TRAIN.SMOOTH.LAMBDA_DAMSM))  
         for epoch in range(start_epoch, self.max_epoch):
             
             ##### set everything to trainable ####
@@ -313,9 +249,14 @@ class JoImTeR(object):
                 ######################################################
                 imgs, captions, masks, class_ids, cap_lens = data_iter.next()
                 class_ids = class_ids.numpy()
+                ## due to the broken image collate_fn, batch size could change. Move labels inside step loop
+                batch_size = imgs.shape[0] # actual batch size could be different from self.batch_size
+                labels = Variable(torch.LongTensor(range(batch_size))) # used for matching loss
+#                 match_labels = self.prepare_labels(batch_size) # used for matching loss
                 
                 if cfg.CUDA:
                     imgs, captions, masks, cap_lens = imgs.cuda(), captions.cuda(), masks.cuda(), cap_lens.cuda()
+                    labels = labels.cuda()
                 # add images, image masks, captions, caption masks for catr model
                 
                 ################## feedforward damsm model ##################
@@ -364,7 +305,7 @@ class JoImTeR(object):
                 pbar.set_description('damsm %.5f' % ( float(total_damsm_loss) / (step+1)))
                 ######################################################################################################
                 ##########################################################
-            v_s_cur_loss, v_w_cur_loss = self.evaluate(image_encoder, text_encoder, self.val_batch_size)
+            v_s_cur_loss, v_w_cur_loss = self.evaluate(image_encoder, text_encoder)
             print('[epoch: %d] val_w_loss: %.4f, val_s_loss: %.4f' % (epoch, v_w_cur_loss, v_s_cur_loss))
             ### val losses ###
             tbw.add_scalar('Val_step/val_w_loss', float(v_w_cur_loss), epoch)
@@ -384,28 +325,31 @@ class JoImTeR(object):
                 
 
     @torch.no_grad()
-    def evaluate(self, cnn_model, trx_model, batch_size):
+    def evaluate(self, cnn_model, trx_model):
         cnn_model.eval()
         trx_model.eval()
-#         cap_model.eval() ### 
         s_total_loss = 0
         w_total_loss = 0
         ### add caption criterion here. #####
-        labels = Variable(torch.LongTensor(range(batch_size))) # used for matching loss
-        if cfg.CUDA:
-            labels = labels.cuda()
+        ## same reason as train(), batch_size could change when image broken
+#         labels = Variable(torch.LongTensor(range(batch_size))) # used for matching loss
+#         if cfg.CUDA:
+#             labels = labels.cuda()
         #####################################
         
         val_data_iter = iter(self.dataloader_val)
-        for step in tqdm(range(len(val_data_iter)),leave=False):
+        for step in tqdm(range(len(val_data_iter)), leave=False):
             real_imgs, captions, masks, class_ids, cap_lens = val_data_iter.next()
             class_ids = class_ids.numpy()
+            batch_size = real_imgs.shape[0]
+            labels = Variable(torch.LongTensor(range(batch_size))) # used for matching loss
             if cfg.CUDA:
                 real_imgs, captions, masks, cap_lens = real_imgs.cuda(), captions.cuda(), masks.cuda(), cap_lens.cuda()
+                labels = labels.cuda()
             words_features, sent_code = cnn_model(real_imgs)
             words_emb, sent_emb = trx_model(captions, masks)
-            w_loss0, w_loss1, attn = words_loss(words_features, words_emb, labels,
-                                                cap_lens, class_ids, batch_size)
+            w_loss0, w_loss1, attn = words_loss(words_features, words_embs[:,:,1:], labels,
+                                                cap_lens-1, class_ids, batch_size)
             w_total_loss += (w_loss0 + w_loss1).data
 
             s_loss0, s_loss1 = \

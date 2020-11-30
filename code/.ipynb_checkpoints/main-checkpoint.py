@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 from misc.config import Config
-from dataset import IUDataset, build_dataset
+from dataset_mimic import build_dataset
 from trainer import JoImTeR as trainer
 
 import os
@@ -25,11 +25,17 @@ cfg  = Config()
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Train a AttnGAN network')
+    parser = argparse.ArgumentParser(description='Train a JoImTeR network')
     parser.add_argument('--gpu', dest='gpu_id', type=int, default=-1)
     parser.add_argument('--data_dir', dest='data_dir', type=str, default='')
     args = parser.parse_args()
     return args
+
+## collate_fn for handling None type item due to image corruption ##
+## This will return batch size - broken image number ##
+def collate_fn_ignore_none(batch):
+    batch = list(filter(lambda x: x is not None, batch))
+    return torch.utils.data.dataloader.default_collate(batch)
 
 
 if __name__ == "__main__":
@@ -60,17 +66,19 @@ if __name__ == "__main__":
     
 
     data_set = build_dataset('train', cfg)
+    print('Training set %d is loaded.' % len(data_set))
     train_loader = torch.utils.data.DataLoader(
-                    data_set, batch_size=cfg.batch_size, drop_last=True,
+                    data_set, batch_size=cfg.batch_size, 
+                    collate_fn=collate_fn_ignore_none, drop_last=True,
                     shuffle=True, num_workers=cfg.num_workers)
     
     
-    data_set = build_dataset('val', cfg)
+    val_data_set = build_dataset('val', cfg)
+    print('Validation set %d is loaded.' % len(val_data_set))
     val_loader = torch.utils.data.DataLoader(
-                    data_set, batch_size=cfg.val_batch_size, drop_last=False,
+                    val_data_set, batch_size=cfg.val_batch_size, 
+                    collate_fn=collate_fn_ignore_none, drop_last=False,
                     shuffle=False, num_workers=cfg.num_workers)
-    
-    
     
     
     # Define models and go to train/evaluate

@@ -179,8 +179,13 @@ class TextEncoder(nn.Module):
         
     def forward(self, x, mask):
         word_feat = self.bert(input_ids=x, attention_mask=mask)[0]
-#         print(word_feat.shape)
-#         sent_feat = word_feat[:,0,:]
-        sent_feat = word_feat.mean(1)
+
+        # for CLS feat as sent_feat
+        # sent_feat = word_feat[:,0,:]
+    
+        # for masked mean sent_feat
+        sent_feat = (word_feat * mask.unsqueeze(-1)).sum(1) / mask.sum(1).unsqueeze(-1)
+    
+#         sent_feat = word_feat.mean(1)
         sent_feat = self.sent(sent_feat)       
         return word_feat.transpose(1,2), sent_feat

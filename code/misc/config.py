@@ -3,7 +3,7 @@ class Config(object):
     def __init__(self):
         self.DATASET_NAME = 'MIMIC'
         self.CUDA = True
-        self.snapshot_interval = 10
+        self.snapshot_interval = 1
         self.text_encoder_path = ''
         self.CONFIG_NAME = 'test'
         self.DATA_DIR = '../'
@@ -13,11 +13,14 @@ class Config(object):
         self.GAMMA2 = 5.0
         self.GAMMA3 = 10.0
         self.clip_max_norm = 1.0
-        self.max_length = 320
+        self.max_length = 256 ## 320 is used for word-piece tokens like Bert; for word-based tokens, it can be smaller. 
+        self.hidden_dropout_prob = 0.5
+        self.attention_probs_dropout_prob = 0.05
         # Learning Rates
-        self.lr_backbone = 0
+#         self.lr_backbone = 0
         self.lr = 5e-5
 
+        
         # Epochs
         self.epochs = 100
         self.lr_drop = 30
@@ -26,8 +29,8 @@ class Config(object):
         self.weight_decay = 1e-4
 
         # Backbone
-        self.backbone = 'v3'
-        self.position_embedding = 'sine'
+#         self.backbone = 'v3'
+#         self.position_embedding = 'sine'
 #         self.dilation = True
         
         # Basic
@@ -40,7 +43,7 @@ class Config(object):
         self.checkpoint = './checkpoint.pth'
         
         
-        self.prefix = 'catr_damsm256_proj'
+#         self.prefix = 'catr_damsm256_proj'
 
         # Transformer
         self.hidden_dim = 512
