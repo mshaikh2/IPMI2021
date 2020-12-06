@@ -17,6 +17,38 @@ def cosine_similarity(x1, x2, dim=1, eps=1e-8):
     w2 = torch.norm(x2, 2, dim)
     return (w12 / (w1 * w2).clamp(min=eps)).squeeze()
 
+def cosine_distance(x1, x2, dim=1, eps=1e-8):
+    """Returns cosine similarity between x1 and x2, computed along dim.
+    """
+    w12 = torch.sum(x1 * x2, dim)
+    w1 = torch.norm(x1, 2, dim)
+    w2 = torch.norm(x2, 2, dim)
+    return 1-(w12 / (w1 * w2).clamp(min=eps)).squeeze()
+
+def triplet_loss_with_cosine_distance(anc, pos, neg, margin=0.5):
+    score = cosine_distance(anc,pos) - cosine_distance(anc,neg) + margin
+    z = torch.zeros_like(score)
+    return torch.max(score,z)
+
+def sent_triplet_loss(cnn_code, rnn_code, labels, neg_ids, batch_size):
+    anchor_ids = labels
+    positive_ids = labels
+    negative_ids = neg_ids
+    
+    img_anchor = cnn_code[anchor_ids]
+    text_positive = rnn_code[positive_ids]
+    text_negative = rnn_code[negative_ids]
+    
+    text_anchor = rnn_code[anchor_ids]
+    img_positive = cnn_code[positive_ids]
+    img_negative = cnn_code[negative_ids]
+    
+    i2t_triplet_loss = triplet_loss_with_cosine_distance(img_anchor, text_positive, text_negative, margin = cfg.sent_margin).mean()   
+    t2i_triplet_loss = triplet_loss_with_cosine_distance(text_anchor, img_positive, img_negative, margin = cfg.sent_margin).mean()
+    
+    return i2t_triplet_loss, t2i_triplet_loss
+
+
 
 def sent_loss(cnn_code, rnn_code, labels, class_ids,
               batch_size, eps=1e-8):
@@ -58,6 +90,78 @@ def sent_loss(cnn_code, rnn_code, labels, class_ids,
     else:
         loss0, loss1 = None, None
     return loss0, loss1
+
+def word_similarity(img_features, words_emb, words_num):
+    # -> 1 x nef x words_num
+    word = words_emb[0, :, :words_num].unsqueeze(0).contiguous()
+    # 1 x nef x 17*17
+    context = img_features
+    """
+        word(query): 1 x nef x words_num
+        context: 1 x nef x 16 x 16
+        weiContext: 1 x nef x words_num
+        attn: 1 x words_num x 16 x 16
+    """
+    weiContext, attn = func_attention(word, context, cfg.GAMMA1)
+    att_maps = attn[0].unsqueeze(0).contiguous()
+    # --> batch_size x words_num x nef
+    word = word.transpose(1, 2).contiguous()
+    weiContext = weiContext.transpose(1, 2).contiguous()
+    # --> batch_size*words_num x nef
+    word = word.view(1 * words_num, -1)
+    weiContext = weiContext.view(1 * words_num, -1)
+    #
+    # -->batch_size*words_num
+    row_sim = cosine_similarity(word, weiContext)
+    # --> batch_size x words_num
+    row_sim = row_sim.view(1, words_num)
+
+    # Eq. (10)
+    row_sim.mul_(cfg.GAMMA2).exp_()
+    row_sim = row_sim.sum(dim=1, keepdim=True)
+    row_sim = -torch.log(row_sim)
+    return row_sim, att_maps
+
+def triplet_loss_with_word_similarity(anc, pos, neg, words_num, flag='img', margin=0.5):
+    if flag == 'img':
+        pos_score, pos_attn_map = word_similarity(anc, pos, words_num)
+        neg_score, _ = word_similarity(anc, neg, words_num)
+        score = pos_score - neg_score + margin
+    elif flag == 'text':
+        pos_score, pos_attn_map = word_similarity(pos, anc, words_num)
+        neg_score, _ = word_similarity(neg, anc, words_num)
+        score = pos_score - neg_score + margin
+        
+    z = torch.zeros_like(score)
+    return torch.max(score,z), pos_attn_map
+    
+def words_triplet_loss(img_features, words_emb, labels, neg_ids, cap_lens, batch_size):
+    
+    anchor_ids = labels
+    positive_ids = labels
+    negative_ids = neg_ids
+    
+    i2t_triplet_loss_arr = []
+    t2i_triplet_loss_arr = []
+    attn_maps = []
+    for i in range(batch_size):
+        img_anchor = img_features[anchor_ids[i:i+1]] # 1 x nef x 16 x 16
+        text_positive = words_emb[positive_ids[i:i+1]] # 1 x nef x 256
+        text_negative = words_emb[negative_ids[i:i+1]] # 
+        i2t_triplet_loss, img_pos_attn_map = triplet_loss_with_word_similarity(img_anchor, text_positive, text_negative, cap_lens[i], flag = 'img', margin = cfg.word_margin)  
+        i2t_triplet_loss_arr.append(i2t_triplet_loss)
+        attn_maps.append(img_pos_attn_map)
+        
+        text_anchor = words_emb[anchor_ids[i:i+1]]
+        img_positive = img_features[positive_ids[i:i+1]]
+        img_negative = img_features[negative_ids[i:i+1]]
+        t2i_triplet_loss, _ = triplet_loss_with_word_similarity(text_anchor, img_positive, img_negative, cap_lens[i], flag = 'text', margin = cfg.word_margin)
+        t2i_triplet_loss_arr.append(t2i_triplet_loss)
+    
+    i2t_triplet_loss = torch.cat(i2t_triplet_loss_arr,1).mean()
+    t2i_triplet_loss = torch.cat(t2i_triplet_loss_arr,1).mean()
+    
+    return i2t_triplet_loss, t2i_triplet_loss, attn_maps
 
 
 def words_loss(img_features, words_emb, labels,
