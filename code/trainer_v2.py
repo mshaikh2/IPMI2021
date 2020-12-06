@@ -22,7 +22,7 @@ from misc.utils import mkdir_p
 from model import TextEncoder, ImageEncoder
 # from InceptionScore import calculate_inception_score
 
-from misc.losses import sent_loss, words_loss
+from misc.losses import sent_loss, words_loss, sent_triplet_loss, words_triplet_loss
 
 from torch.utils.tensorboard import SummaryWriter
 # from torch.utils.data import DataLoader
@@ -293,7 +293,14 @@ class JoImTeR(object):
             s_total_loss1 = 0
             w_total_loss0 = 0
             w_total_loss1 = 0
+            
+            s_t_total_loss0 = 0
+            s_t_total_loss1 = 0
+            w_t_total_loss0 = 0
+            w_t_total_loss1 = 0
+            
             total_damsm_loss = 0
+            total_t_loss = 0
                       
             ####### print out lr of each optimizer before training starts, make sure lrs are correct #########
             print('Learning rates: lr_i %.7f, lr_t %.7f' 
@@ -314,8 +321,12 @@ class JoImTeR(object):
                 imgs, captions, masks, class_ids, cap_lens = data_iter.next()
                 class_ids = class_ids.numpy()
                 
+                ids = np.array(list(range(batch_size)))
+                neg_ids = Variable(torch.LongTensor([np.random.choice(ids[ids!=x]) for x in ids])) # used for matching loss
+                
                 if cfg.CUDA:
                     imgs, captions, masks, cap_lens = imgs.cuda(), captions.cuda(), masks.cuda(), cap_lens.cuda()
+                    neg_ids = neg_ids.cuda()
                 # add images, image masks, captions, caption masks for catr model
                 
                 ################## feedforward damsm model ##################
@@ -329,41 +340,63 @@ class JoImTeR(object):
                 # sent_emb: batch_size x nef
                 words_embs, sent_emb = text_encoder(captions, masks) 
                 
-                #### damsm losses
-                s_loss0, s_loss1 = sent_loss(sent_code, sent_emb, labels, class_ids, batch_size)
-                s_total_loss0 += s_loss0.item()
-                s_total_loss1 += s_loss1.item()
-                damsm_loss = s_loss0 + s_loss1
-                
+#                 #### damsm losses
 #                 w_loss0, w_loss1, attn_maps = words_loss(words_features, words_embs[:,:,1:], labels, cap_lens-1, class_ids, batch_size)
 #                 w_total_loss0 += w_loss0.item()
 #                 w_total_loss1 += w_loss1.item()
-#                 damsm_loss += w_loss0 + w_loss1
+#                 damsm_loss = w_loss0 + w_loss1
                 
+#                 s_loss0, s_loss1 = sent_loss(sent_code, sent_emb, labels, class_ids, batch_size)
+#                 s_total_loss0 += s_loss0.item()
+#                 s_total_loss1 += s_loss1.item()
+#                 damsm_loss += s_loss0 + s_loss1
                 
+#                 total_damsm_loss += damsm_loss.item()
                 
-                total_damsm_loss += damsm_loss.item()
+#                 #### triplet loss
+                s_t_loss0, s_t_loss1 = sent_triplet_loss(sent_code, sent_emb, labels, neg_ids, batch_size)
+                s_t_total_loss0 += s_t_loss0.item()
+                s_t_total_loss1 += s_t_loss1.item()
+                t_loss = s_t_loss0 + s_t_loss1
+                
+#                 w_t_loss0, w_t_loss1, attn_maps = words_triplet_loss(words_features,words_embs[:,:,1:], labels, neg_ids, cap_lens-1, batch_size)
+#                 w_t_total_loss0 += w_t_loss0.item()
+#                 w_t_total_loss1 += w_t_loss1.item()
+#                 t_loss += w_t_loss0 + w_t_loss1
+                
+                total_t_loss += t_loss.item()
                 ############################################################################
                 
-                damsm_loss.backward()
-                    
+                
+                
+#                 damsm_loss.backward()
+                t_loss.backward()
+    
                 torch.nn.utils.clip_grad_norm_(image_encoder.parameters(), cfg.clip_max_norm)                    
                 optimizerI.step()
                 
                 torch.nn.utils.clip_grad_norm_(text_encoder.parameters(), cfg.clip_max_norm)
                 optimizerT.step()
                 ##################### loss values for each step #########################################
-                ## damsm ##
+#                 ## damsm ##
 #                 tbw.add_scalar('Train_step/train_w_step_loss0', float(w_loss0.item()), step + epoch * self.num_batches)
-                tbw.add_scalar('Train_step/train_s_step_loss0', float(s_loss0.item()), step + epoch * self.num_batches)
+#                 tbw.add_scalar('Train_step/train_s_step_loss0', float(s_loss0.item()), step + epoch * self.num_batches)
 #                 tbw.add_scalar('Train_step/train_w_step_loss1', float(w_loss1.item()), step + epoch * self.num_batches)
-                tbw.add_scalar('Train_step/train_s_step_loss1', float(s_loss1.item()), step + epoch * self.num_batches)
-                tbw.add_scalar('Train_step/train_damsm_step_loss', float(damsm_loss.item()), step + epoch * self.num_batches)
+#                 tbw.add_scalar('Train_step/train_s_step_loss1', float(s_loss1.item()), step + epoch * self.num_batches)
+#                 tbw.add_scalar('Train_step/train_damsm_step_loss', float(damsm_loss.item()), step + epoch * self.num_batches)
+
+                ## triplet ##
+#                 tbw.add_scalar('Train_step/train_w_t_step_loss0', float(w_t_loss0.item()), step + epoch * self.num_batches)
+                tbw.add_scalar('Train_step/train_s_t_step_loss0', float(s_t_loss0.item()), step + epoch * self.num_batches)
+#                 tbw.add_scalar('Train_step/train_w_t_step_loss1', float(w_t_loss1.item()), step + epoch * self.num_batches)
+                tbw.add_scalar('Train_step/train_s_t_step_loss1', float(s_t_loss1.item()), step + epoch * self.num_batches)
+                tbw.add_scalar('Train_step/train_t_step_loss', float(t_loss.item()), step + epoch * self.num_batches)
 
                 ################################################################################################    
                 
                 ############ tqdm descriptions showing running average loss in terminal ##############################
-                pbar.set_description('damsm %.5f' % ( float(total_damsm_loss) / (step+1)))
+#                 pbar.set_description('damsm %.5f' % ( float(total_damsm_loss) / (step+1)))
+                pbar.set_description('triplet %.5f' % ( float(total_t_loss) / (step+1)))
                 ######################################################################################################
                 ##########################################################
 #             v_s_cur_loss, v_w_cur_loss = self.evaluate(image_encoder, text_encoder, self.val_batch_size)
@@ -371,11 +404,10 @@ class JoImTeR(object):
 #             ### val losses ###
 #             tbw.add_scalar('Val_step/val_w_loss', float(v_w_cur_loss), epoch)
 #             tbw.add_scalar('Val_step/val_s_loss', float(v_s_cur_loss), epoch)
-            
+
             v_s_cur_loss, _ = self.evaluate(image_encoder, text_encoder, self.val_batch_size)
             print('[epoch: %d] val_s_loss: %.4f' % (epoch, v_s_cur_loss))
             ### val losses ###
-#             tbw.add_scalar('Val_step/val_w_loss', float(v_w_cur_loss), epoch)
             tbw.add_scalar('Val_step/val_s_loss', float(v_s_cur_loss), epoch)
             
             lr_schedulerI.step()
@@ -396,8 +428,8 @@ class JoImTeR(object):
         cnn_model.eval()
         trx_model.eval()
 #         cap_model.eval() ### 
-        s_total_loss = 0
-        w_total_loss = 0
+        s_t_total_loss = 0
+        w_t_total_loss = 0
         ### add caption criterion here. #####
         labels = Variable(torch.LongTensor(range(batch_size))) # used for matching loss
         if cfg.CUDA:
@@ -408,16 +440,29 @@ class JoImTeR(object):
         for step in tqdm(range(len(val_data_iter)),leave=False):
             real_imgs, captions, masks, class_ids, cap_lens = val_data_iter.next()
             class_ids = class_ids.numpy()
+            
+            ids = np.array(list(range(batch_size)))
+            neg_ids = Variable(torch.LongTensor([np.random.choice(ids[ids!=x]) for x in ids])) # used for matching loss
+            
             if cfg.CUDA:
                 real_imgs, captions, masks, cap_lens = real_imgs.cuda(), captions.cuda(), masks.cuda(), cap_lens.cuda()
+                neg_ids = neg_ids.cuda()
             words_features, sent_code = cnn_model(real_imgs)
             words_emb, sent_emb = trx_model(captions, masks)
-            w_loss0, w_loss1, attn = words_loss(words_features, words_emb[:,:,1:], labels, cap_lens-1, class_ids, batch_size)
-            w_total_loss += (w_loss0 + w_loss1).data
+            
+            
+#             w_loss0, w_loss1, attn = words_loss(words_features, words_emb[:,:,1:], labels, cap_lens-1, class_ids, batch_size)
+#             w_total_loss += (w_loss0 + w_loss1).data
 
-            s_loss0, s_loss1 = sent_loss(sent_code, sent_emb, labels, class_ids, batch_size)
-            s_total_loss += (s_loss0 + s_loss1).data
+#             s_loss0, s_loss1 = sent_loss(sent_code, sent_emb, labels, class_ids, batch_size)
+#             s_total_loss += (s_loss0 + s_loss1).data
+            
+            w_t_loss0, w_t_loss1, _ = words_triplet_loss(words_features, words_emb[:,:,1:], labels, neg_ids, cap_lens-1, batch_size)
+            w_t_total_loss += (w_t_loss0 + w_t_loss1).data
 
-        s_cur_loss = s_total_loss / (step+1)
-        w_cur_loss = w_total_loss / (step+1)
-        return s_cur_loss, w_cur_loss
+            s_t_loss0, s_t_loss1 = sent_triplet_loss(sent_code, sent_emb, labels, neg_ids, batch_size)
+            s_t_total_loss += (s_t_loss0 + s_t_loss1).data
+
+        s_t_cur_loss = s_t_total_loss / (step+1)
+        w_t_cur_loss = w_t_total_loss / (step+1)
+        return s_t_cur_loss, w_t_cur_loss

@@ -2,7 +2,7 @@ from __future__ import print_function
 
 from misc.config import Config
 from dataset import IUDataset, build_dataset
-from trainer import JoImTeR as trainer
+from trainer_v3 import JoImTeR as trainer
 
 import os
 # import os
@@ -25,7 +25,7 @@ cfg  = Config()
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Train a AttnGAN network')
+    parser = argparse.ArgumentParser(description='')
     parser.add_argument('--gpu', dest='gpu_id', type=int, default=-1)
     parser.add_argument('--data_dir', dest='data_dir', type=str, default='')
     args = parser.parse_args()

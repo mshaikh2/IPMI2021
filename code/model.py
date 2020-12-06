@@ -169,12 +169,14 @@ class ImageEncoder(nn.Module):
 
 ################ Transformer: Text Encoder ############
 class TextEncoder(nn.Module):
-    def __init__(self,bert_config):
+    def __init__(self, bert_config):
         super(TextEncoder, self).__init__()
-        
+        # batchsize, timesteps, 1
         bert = BertModel(bert_config, add_pooling_layer=False)
 
         self.bert = bert
+        # batchsize, timesteps, 512
+        
         self.sent = nn.Linear(512, 512)
         
     def forward(self, x, mask):
