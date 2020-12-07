@@ -5,13 +5,21 @@ class Config(object):
         self.CUDA = True
         self.snapshot_interval = 50
         self.text_encoder_path = ''
+<<<<<<< Updated upstream
         self.CONFIG_NAME = 'test_only.s.triplet_01.01_04'
+=======
+        self.CONFIG_NAME = 'test_sft.atn.triplet_s0.5.s0.5_01.01'
+>>>>>>> Stashed changes
         self.DATA_DIR = '../'
         self.TRAIN = True
         self.GPU_ID = 0
         self.GAMMA1 = 1.0
         self.GAMMA2 = 1.0
+<<<<<<< Updated upstream
         self.GAMMA3 = 4.0
+=======
+        self.GAMMA3 = 2.0
+>>>>>>> Stashed changes
         self.sent_margin = 0.5
         self.word_margin = 0.5
         self.LAMBDA_TRIPLET = 2.0

@@ -17,6 +17,34 @@ def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
+class SoftAttention(nn.Module):
+    def __init__(self,in_groups,m_heads,in_channels):
+        super(SoftAttention, self).__init__()
+        self.learnable_scalar = torch.tensor(0.1,requires_grad=True)
+        self.conv3d = nn.Conv3d(in_channels=in_groups,out_channels=m_heads,kernel_size=(in_channels,1,1), stride=(in_channels,1,1))
+        self.lrelu = nn.LeakyReLU(inplace=True)
+        self.softmax = nn.Softmax(-1)
+    def forward(self, x):
+#         print('x.shape:',x)
+        h,w = x.shape[-2],x.shape[-1]
+        c = torch.unsqueeze(x,1)
+#         print('c.shape:',c)
+        c = self.conv3d(c)
+        c = self.lrelu(c)
+#         print('c.shape relu:',c)
+        c = c.squeeze(2)
+        c = c.view(c.shape[0],c.shape[1],h*w)
+#         print('c.shape h*w:',c)
+        c = self.softmax(c)
+#         print('c.shape sfmx:',c)
+        c = c.view(c.shape[0],c.shape[1],h,w)
+#         print('c.shape:',c)
+        attn_maps = torch.unsqueeze(c.sum(1),1)
+#         print('attn_maps.shape:',attn_maps)
+        importance = x*attn_maps
+        out = x + self.learnable_scalar*importance
+#         print('out.shape:',out)
+        return out
 
 class BasicBlock(nn.Module):
     """
@@ -61,6 +89,12 @@ class BasicBlock(nn.Module):
 
         return out
 
+    
+class SoftAttention(nn.Module):
+    def __init__():
+        super(SoftAttention, self).__init__()
+    def forward(self, x):
+        
 
 class ImageEncoder(nn.Module):
     """
@@ -169,12 +203,14 @@ class ImageEncoder(nn.Module):
 
 ################ Transformer: Text Encoder ############
 class TextEncoder(nn.Module):
-    def __init__(self,bert_config):
+    def __init__(self, bert_config):
         super(TextEncoder, self).__init__()
-        
+        # batchsize, timesteps, 1
         bert = BertModel(bert_config, add_pooling_layer=False)
 
         self.bert = bert
+        # batchsize, timesteps, 512
+        
         self.sent = nn.Linear(512, 512)
         
     def forward(self, x, mask):

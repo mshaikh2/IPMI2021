@@ -89,11 +89,7 @@ class BasicBlock(nn.Module):
 
         return out
 
-    
-class SoftAttention(nn.Module):
-    def __init__():
-        super(SoftAttention, self).__init__()
-    def forward(self, x):
+   
         
 
 class ImageEncoder(nn.Module):
@@ -124,6 +120,7 @@ class ImageEncoder(nn.Module):
                                bias=False)
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
+        self.soft_attention = SoftAttention(in_groups=1,m_heads=16,in_channels=128)
         # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 16, layers[0], stride=2)
         self.layer2 = self._make_layer(block, 32, layers[1], stride=2)
@@ -187,6 +184,7 @@ class ImageEncoder(nn.Module):
         x = self.layer2(x) # batch_size, 32, 128, 128
         x = self.layer3(x) # batch_size, 64, 64, 64
         x = self.layer4(x) # batch_size, 128, 32, 32
+        x = self.soft_attention(x) # batch_size, 128, 32, 32
         x = self.layer5(x) # batch_size, 256, 16, 16
         region_feat = self.region(x) # batch_size, 512, 16, 16
         x = self.layer6(x) # batch_size, 512, 8, 8

@@ -99,8 +99,8 @@ class IUDataset(Dataset):
         elif self.mode == 'test':
             self.keys = dataset['data_split']['test_uids'] # uid list
         
-        # self.idx2word = dataset['idx2word']
-        # self.word2ids = dataset['word2idx']
+        self.idx2word = dataset['idx2word']
+        self.word2idx = dataset['word2idx']
         self.__sep_id__ = dataset['word2idx']['[SEP]']
         self.vocab_size = len(dataset['word2idx'])
 
