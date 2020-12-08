@@ -27,7 +27,7 @@ class Config(object):
         self.num_workers = 4
         # Learning Rates
         self.lr_backbone = 0
-        self.lr = 5e-5
+        self.lr = 5e-7
 
         # Epochs
         self.epochs = 500

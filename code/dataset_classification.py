@@ -105,15 +105,15 @@ class IUDataset(Dataset):
         self.vocab_size = len(dataset['word2idx'])
         
         self.max_length = max_length + 1
-        self.class_to_idx = {'no finding':0
-                             ,'atelectasis':1
-                             ,'cardiomegaly':2
-                             ,'effusion':3
-                             ,'emphysema':4
-                             ,'infiltrate':5
-                             ,'nodule':6
-                             ,'thickening':7}
-        self.num_classes = 8
+        self.class_to_idx = {'no finding':7
+                             ,'atelectasis':0
+                             ,'cardiomegaly':1
+                             ,'effusion':2
+                             ,'emphysema':3
+                             ,'infiltrate':4
+                             ,'nodule':5
+                             ,'thickening':6}
+        self.num_classes = 7
 
     def __len__(self):
         return len(self.keys)
@@ -134,7 +134,8 @@ class IUDataset(Dataset):
 #         print(classes)
         y_onehot = torch.FloatTensor(self.num_classes).zero_()
 #         print(y_onehot)
-        y_onehot.scatter_(0, classes, 1)
+        if 7 not in classes: # all zeros for No Finding, for others multi-1-hot
+            y_onehot.scatter_(0, classes, 1)
 #         print(y_onehot)
         return image, y_onehot
 
