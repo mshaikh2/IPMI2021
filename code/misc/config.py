@@ -5,35 +5,33 @@ class Config(object):
         self.CUDA = True
         self.snapshot_interval = 50
         self.text_encoder_path = ''
-<<<<<<< Updated upstream
-        self.CONFIG_NAME = 'test_only.s.triplet_01.01_04'
-=======
-        self.CONFIG_NAME = 'test_sft.atn.triplet_s0.5.s0.5_01.01'
->>>>>>> Stashed changes
+        self.CONFIG_NAME = 'OpenI_class_pre-trained_t2.0s0.5.w0.5_d0.75-01.01.02'
         self.DATA_DIR = '../'
         self.TRAIN = True
-        self.GPU_ID = 0
+        self.GPU_ID = 3
         self.GAMMA1 = 1.0
         self.GAMMA2 = 1.0
-<<<<<<< Updated upstream
-        self.GAMMA3 = 4.0
-=======
         self.GAMMA3 = 2.0
->>>>>>> Stashed changes
         self.sent_margin = 0.5
         self.word_margin = 0.5
-        self.LAMBDA_TRIPLET = 2.0
-        self.LAMBDA_DAMSM = 1.0
+        self.LAMBDA_TRIPLET = 4.0
+        self.LAMBDA_DAMSM = 0.5
         self.clip_max_norm = 1.5
         self.hidden_dropout_prob = 0.5
         self.attention_probs_dropout_prob = 0.1
+        self.init_image_encoder_path = '../output/OpenI_test_combo_t2.0s0.5.w0.5_d0.75-01.01.02_2020_12_07_01_13_05/Model/image_encoder300.pth'
+        self.pretrained = True
+        self.seed = 42
+        self.batch_size = 64
+        self.val_batch_size = 100
+        self.num_workers = 4
         # Learning Rates
         self.lr_backbone = 0
         self.lr = 5e-5
 
         # Epochs
         self.epochs = 500
-        self.lr_drop = 200
+        self.lr_drop = 100
         self.lr_gamma = 0.1
         self.start_epoch = 0
         self.weight_decay = 1e-4
@@ -45,10 +43,7 @@ class Config(object):
         
         # Basic
         self.device = 'cuda:3'
-        self.seed = 42
-        self.batch_size = 32
-        self.val_batch_size = 50
-        self.num_workers = 4
+        
 #         self.checkpoint = 'catr/checkpoints/catr_damsm256_proj_coco2014_ep02.pth'
         self.checkpoint = './checkpoint.pth'
         

@@ -90,21 +90,30 @@ class IUDataset(Dataset):
         self.mode = mode
 #         vocab='allenai/scibert_scivocab_uncased'
 #         self.tokenizer = BertTokenizer.from_pretrained(vocab, do_lower=True)
-
+        self.classes = dataset['classes']
         self.datadict = dataset['data_dict'] # uid: {text:text, filenames:[filename]}
         if self.mode == 'train':
             self.keys = dataset['data_split']['train_uids'] # uid list
         elif self.mode == 'val':
-            self.keys = dataset['data_split']['val_uids'] # uid list
-        elif self.mode == 'test':
-            self.keys = dataset['data_split']['test_uids'] # uid list
+            self.keys = dataset['data_split']['val_test_uids'] # uid list
+#         elif self.mode == 'test':
+#             self.keys = dataset['data_split']['test_uids'] # uid list
         
         self.idx2word = dataset['idx2word']
         self.word2idx = dataset['word2idx']
         self.__sep_id__ = dataset['word2idx']['[SEP]']
         self.vocab_size = len(dataset['word2idx'])
-
+        
         self.max_length = max_length + 1
+        self.class_to_idx = {'no finding':0
+                             ,'atelectasis':1
+                             ,'cardiomegaly':2
+                             ,'effusion':3
+                             ,'emphysema':4
+                             ,'infiltrate':5
+                             ,'nodule':6
+                             ,'thickening':7}
+        self.num_classes = 8
 
     def __len__(self):
         return len(self.keys)
@@ -120,28 +129,14 @@ class IUDataset(Dataset):
             
         if self.transform:
             image = self.transform(image)
-
-        max_len_array = np.zeros(self.max_length, dtype='int')
-        cap_mask = np.zeros(self.max_length, dtype='int')
-        caption = np.array(self.datadict[uid]['token_ids'])
-        if len(caption)<=self.max_length:
-            cap_mask[:len(caption)] = 1
-            max_len_array[:len(caption)] = caption
-        else:
-            cap_mask[:] = 1
-            max_len_array = caption[:self.max_length]
-            max_len_array[-1] = self.__sep_id__
-#         caption = normalize_report(caption)['sentences']
-#         caption_encoded = self.tokenizer.encode_plus(
-#                                     caption, max_length=self.max_length, padding='max_length', 
-#                                     return_attention_mask=True, return_token_type_ids=False, truncation=True)
         
-#         caption = np.array(caption_encoded['input_ids'])
-#         cap_mask = np.array(caption_encoded['attention_mask']).astype(bool)
-        caption = max_len_array
-        cap_mask = cap_mask.astype(bool)
-        cap_lens = cap_mask.sum(-1)
-        return image, caption, cap_mask, uid, cap_lens
+        classes = torch.tensor([self.class_to_idx[x] for x in self.classes[uid]])
+#         print(classes)
+        y_onehot = torch.FloatTensor(self.num_classes).zero_()
+#         print(y_onehot)
+        y_onehot.scatter_(0, classes, 1)
+#         print(y_onehot)
+        return image, y_onehot
 
 def build_dataset(mode='train', cfg=None):
     data_dir = '../data/'
@@ -160,11 +155,11 @@ def build_dataset(mode='train', cfg=None):
                                transform=val_transform)
         return data
     
-    elif mode == 'test':
-        data = IUDataset(img_dir, dataset, 
-                               max_length=cfg.max_length, mode=mode, 
-                               transform=val_transform)
-        return data
+#     elif mode == 'test':
+#         data = IUDataset(img_dir, dataset, 
+#                                max_length=cfg.max_length, mode=mode, 
+#                                transform=val_transform)
+#         return data
 
     else:
         raise NotImplementedError(f"{mode} not supported")

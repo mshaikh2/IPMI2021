@@ -217,7 +217,8 @@ class JoImTeR(object):
             'model': image_encoder.state_dict(),
             'optimizer': optimizerI.state_dict(),
             'lr_scheduler': lr_schedulerI.state_dict(),
-        }, '%s/image_encoder%d.pth' % (self.model_dir, epoch))
+            'epoch':epoch
+        }, '%s/image_encoder.pth' % (self.model_dir))
 
         
         # save text encoder model here
@@ -225,7 +226,8 @@ class JoImTeR(object):
             'model': text_encoder.state_dict(),
             'optimizer': optimizerT.state_dict(),
             'lr_scheduler': lr_schedulerT.state_dict(),
-        }, '%s/text_encoder%d.pth' % (self.model_dir, epoch))
+            'epoch':epoch
+        }, '%s/text_encoder.pth' % (self.model_dir))
 
         
     def set_requires_grad_value(self, models_list, brequires):
@@ -281,6 +283,7 @@ class JoImTeR(object):
 #                                                                                                   ,cfg.TRAIN.SMOOTH.LAMBDA_FI                                                                                                  
 #                                                                                                   ,cfg.TRAIN.SMOOTH.LAMBDA_DAMSM))
         
+        best_val_loss = 100.0
         for epoch in range(start_epoch, self.max_epoch):
             
             ##### set everything to trainable ####
@@ -346,32 +349,32 @@ class JoImTeR(object):
                 s_total_loss1 += s_loss1.item()
                 damsm_loss = s_loss0 + s_loss1
                 
-#                 w_loss0, w_loss1, attn_maps = words_loss(words_features, words_embs[:,:,1:], labels, cap_lens-1, class_ids, batch_size)
-#                 w_total_loss0 += w_loss0.item()
-#                 w_total_loss1 += w_loss1.item()
-#                 damsm_loss += w_loss0 + w_loss1
+                w_loss0, w_loss1, attn_maps = words_loss(words_features, words_embs[:,:,1:], labels, cap_lens-1, class_ids, batch_size)
+                w_total_loss0 += w_loss0.item()
+                w_total_loss1 += w_loss1.item()
+                damsm_loss += w_loss0 + w_loss1
                 
                 total_damsm_loss += damsm_loss.item()
                 
-#                 #### triplet loss
-#                 s_t_loss0, s_t_loss1 = sent_triplet_loss(sent_code, sent_emb, labels, neg_ids, batch_size)
-#                 s_t_total_loss0 += s_t_loss0.item()
-#                 s_t_total_loss1 += s_t_loss1.item()
-#                 t_loss = s_t_loss0 + s_t_loss1
+                #### triplet loss
+                s_t_loss0, s_t_loss1 = sent_triplet_loss(sent_code, sent_emb, labels, neg_ids, batch_size)
+                s_t_total_loss0 += s_t_loss0.item()
+                s_t_total_loss1 += s_t_loss1.item()
+                t_loss = s_t_loss0 + s_t_loss1
                 
-#                 w_t_loss0, w_t_loss1, attn_maps = words_triplet_loss(words_features,words_embs[:,:,1:], labels, neg_ids, cap_lens-1, batch_size)
-#                 w_t_total_loss0 += w_t_loss0.item()
-#                 w_t_total_loss1 += w_t_loss1.item()
-#                 t_loss += w_t_loss0 + w_t_loss1
+                w_t_loss0, w_t_loss1, attn_maps = words_triplet_loss(words_features,words_embs[:,:,1:], labels, neg_ids, cap_lens-1, batch_size)
+                w_t_total_loss0 += w_t_loss0.item()
+                w_t_total_loss1 += w_t_loss1.item()
+                t_loss += w_t_loss0 + w_t_loss1
                 
-#                 total_t_loss += t_loss.item()
+                total_t_loss += t_loss.item()
                 ############################################################################
                 
                 
-#                 damsm_triplet_combo_loss = cfg.LAMBDA_DAMSM*damsm_loss + cfg.LAMBDA_TRIPLET*t_loss
-                damsm_loss.backward()
+                damsm_triplet_combo_loss = cfg.LAMBDA_DAMSM*damsm_loss + cfg.LAMBDA_TRIPLET*t_loss
+#                 damsm_loss.backward()
 #                 t_loss.backward()
-#                 damsm_triplet_combo_loss.backward()
+                damsm_triplet_combo_loss.backward()
     
                 torch.nn.utils.clip_grad_norm_(image_encoder.parameters(), cfg.clip_max_norm)                    
                 optimizerI.step()
@@ -413,13 +416,14 @@ class JoImTeR(object):
             lr_schedulerT.step()
             
             end_t = time.time()
-            
-            if epoch % cfg.snapshot_interval == 0:
+            total_val_loss = (float(v_w_cur_loss)+float(v_s_cur_loss)+float(v_w_t_cur_loss)+float(v_s_t_cur_loss))/4.0
+            if total_val_loss<best_val_loss:
+                best_val_loss=total_val_loss
                 self.save_model(image_encoder, text_encoder, optimizerI, optimizerT, lr_schedulerI, lr_schedulerT, epoch)                
                 
             
 
-        self.save_model(image_encoder, text_encoder, optimizerI, optimizerT, lr_schedulerI, lr_schedulerT, epoch)                
+#         self.save_model(image_encoder, text_encoder, optimizerI, optimizerT, lr_schedulerI, lr_schedulerT, epoch)                
                 
 
     @torch.no_grad()

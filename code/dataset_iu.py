@@ -144,7 +144,7 @@ class IUDataset(Dataset):
         return image, caption, cap_mask, uid, cap_lens
 
 def build_dataset(mode='train', cfg=None):
-    data_dir = '../data/ChestXRay/dataset/'
+    data_dir = '../data/'
     img_dir = os.path.join(data_dir, 'images', 'images_normalized')
     with open('../data/ChestXRay/dataset/cleaned_dataset.pickle','rb') as f:
         dataset = pickle.load(f)

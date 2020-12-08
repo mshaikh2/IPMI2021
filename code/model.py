@@ -89,11 +89,6 @@ class BasicBlock(nn.Module):
 
         return out
 
-    
-class SoftAttention(nn.Module):
-    def __init__():
-        super(SoftAttention, self).__init__()
-    def forward(self, x):
         
 
 class ImageEncoder(nn.Module):
@@ -200,6 +195,41 @@ class ImageEncoder(nn.Module):
         # outputs += (lowerlevel_img_feat,)
         return region_feat, global_feat
 
+    
+################ Transformer: Text Encoder ############
+class ImageEncoder_Classification(nn.Module):
+    def __init__(self,encoder_path=None, pretrained=True, cfg = None):
+        super(ImageEncoder_Classification, self).__init__()
+        # batchsize, timesteps, 1
+        self.pretrained_encoder = ImageEncoder(output_channels=cfg.hidden_dim)
+        if pretrained:
+            print('Load image encoder from:', encoder_path)
+            state_dict = torch.load(encoder_path, map_location='cpu')
+            if 'model' in state_dict.keys():
+                self.pretrained_encoder.load_state_dict(state_dict['model'])
+            else:
+                self.pretrained_encoder.load_state_dict(state_dict)
+        
+        self.gap = nn.AvgPool2d(kernel_size=16)
+        self.projection_region = nn.Linear(512, 256)
+        
+        self.projection_global = nn.Linear(512, 256)        
+        self.relu = nn.ReLU(inplace=True)
+        
+        self.fc1 = nn.Linear(512, 256)
+        
+        self.do = nn.Dropout(0.5)
+        self.output = nn.Linear(256,8) # 8 classes, no findings as class 0
+        
+    def forward(self, x):
+        f_r, f_g = self.pretrained_encoder(x) # N, 512, 16, 16; N, 512
+        g_p = torch.squeeze(self.gap(f_r))
+        f_r = self.relu(self.projection_region(g_p))
+        f_g = self.relu(self.projection_global(f_g))
+        net = torch.cat((f_r,f_g),dim=-1)
+        net = self.do(self.fc1(net))
+        out = self.output(net)
+        return out
 
 ################ Transformer: Text Encoder ############
 class TextEncoder(nn.Module):
