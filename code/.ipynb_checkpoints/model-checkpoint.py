@@ -25,26 +25,26 @@ class SoftAttention(nn.Module):
         self.lrelu = nn.LeakyReLU(inplace=True)
         self.softmax = nn.Softmax(-1)
     def forward(self, x):
-#         print('x.shape:',x)
+#         print('x.shape:',x.shape)
         h,w = x.shape[-2],x.shape[-1]
         c = torch.unsqueeze(x,1)
-#         print('c.shape:',c)
+#         print('c.shape:',c.shape)
         c = self.conv3d(c)
         c = self.lrelu(c)
-#         print('c.shape relu:',c)
+#         print('c.shape lrelu:',c.shape)
         c = c.squeeze(2)
         c = c.view(c.shape[0],c.shape[1],h*w)
-#         print('c.shape h*w:',c)
+#         print('c.shape h*w:',c.shape)
         c = self.softmax(c)
-#         print('c.shape sfmx:',c)
+#         print('c.shape sfmx:',c.shape)
         c = c.view(c.shape[0],c.shape[1],h,w)
-#         print('c.shape:',c)
+#         print('c.shape:',c.shape)
         attn_maps = torch.unsqueeze(c.sum(1),1)
-#         print('attn_maps.shape:',attn_maps)
+#         print('attn_maps.shape:',attn_maps.shape)
         importance = x*attn_maps
         out = x + self.learnable_scalar*importance
-#         print('out.shape:',out)
-        return out
+#         print('out.shape:',out.shape)
+        return out,attn_maps
 
 class BasicBlock(nn.Module):
     """
@@ -210,7 +210,9 @@ class ImageEncoder_Classification(nn.Module):
             else:
                 self.pretrained_encoder.load_state_dict(state_dict)
         
-        self.gap = nn.AvgPool2d(kernel_size=16)
+        self.soft_attention = SoftAttention(in_groups=1, m_heads=16, in_channels=512)
+        
+        self.gap = nn.AvgPool2d(kernel_size=16) # gap = GlobalAveragePooling
         self.projection_region = nn.Linear(512, 256)
         
         self.projection_global = nn.Linear(512, 256)        
@@ -219,16 +221,17 @@ class ImageEncoder_Classification(nn.Module):
         self.fc1 = nn.Linear(512, 256)
         
         self.do = nn.Dropout(0.5)
-        self.output = nn.Linear(256,8) # 8 classes, no findings as class 0
+        self.output = nn.Linear(256,8) # 8 classes including no findings
         
     def forward(self, x):
         f_r, f_g = self.pretrained_encoder(x) # N, 512, 16, 16; N, 512
-        g_p = torch.squeeze(self.gap(f_r))
-        f_r = self.relu(self.projection_region(g_p))
-        f_g = self.relu(self.projection_global(f_g))
-        net = torch.cat((f_r,f_g),dim=-1)
-        net = self.do(self.fc1(net))
-        out = self.output(net)
+        f_r,attn_maps = self.soft_attention(f_r)
+        g_p = torch.squeeze(self.gap(f_r)) # N, 512
+        f_r = self.relu(self.projection_region(self.do(g_p))) # N, 256
+        f_g = self.relu(self.projection_global(self.do(f_g))) # N, 256
+        net = torch.cat((f_r,f_g),dim=-1) #  N, 512
+        net = self.do(self.fc1(self.do(net)))  # N, 256
+        out = self.output(net)  # N, 8
         return out
 
 ################ Transformer: Text Encoder ############

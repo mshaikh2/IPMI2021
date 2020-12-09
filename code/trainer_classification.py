@@ -20,6 +20,7 @@ import dateutil.tz
 from misc.utils import mkdir_p
 # from datasets import prepare_data
 from model import ImageEncoder_Classification
+from sklearn.metrics import roc_auc_score
 # from InceptionScore import calculate_inception_score
 
 # from misc.losses import sent_loss, words_loss, sent_triplet_loss, words_triplet_loss
@@ -50,15 +51,23 @@ class JoImTeR(object):
 
         torch.cuda.set_device(cfg.GPU_ID)
         cudnn.benchmark = True
-
+        Q_c = np.array([46,53,86,103,137,265,290,2422])
+        Q = 3166.0
+        self.class_weight_vector = torch.tensor((Q - Q_c)/Q)        
         self.batch_size = data_loader.batch_size
         self.val_batch_size = dataloader_val.batch_size
         self.max_epoch = cfg.epochs
         self.snapshot_interval = cfg.snapshot_interval
-        self.criterion = nn.BCEWithLogitsLoss()
+        pos_weights = torch.tensor([3.255, 3.255, 3.255, 3.255, 3.255, 3.255, 3.255, 1.0])
+        self.criterion = nn.BCEWithLogitsLoss(reduction='none',pos_weight = pos_weights)
+        
         self.data_loader = data_loader
         self.dataloader_val = dataloader_val
-        self.num_batches = len(self.data_loader)
+        self.num_batches = len(self.data_loader)  
+        if cfg.CUDA:
+            pos_weights = pos_weights.cuda()
+            self.class_weight_vector = self.class_weight_vector.cuda()
+            self.criterion = self.criterion.cuda()
         
     def build_models(self):
         # ###################encoders######################################## #
@@ -90,11 +99,18 @@ class JoImTeR(object):
         ### change the learning rate in this function ###
         
         #################################
-        
+        classification_parameters = []
+        for n, p in image_encoder.named_parameters():
+            if 'pretrained_encoder' not in n:
+                classification_parameters.append(p)
+        optim_params = [
+            {'params':image_encoder.pretrained_encoder.parameters(), 'lr':cfg.lr_backbone}, 
+            {'params':classification_parameters, 'lr':cfg.lr}
+        ]
 #         print('\n\n CNN Encoder parameters that do not require grad are:')
-        optimizerI = torch.optim.Adam(image_encoder.parameters()
-                                           , lr=cfg.lr
+        optimizerI = torch.optim.Adam(optim_params
                                            , weight_decay=cfg.weight_decay)
+        
         lr_schedulerI = torch.optim.lr_scheduler.StepLR(optimizerI, cfg.lr_drop, gamma=cfg.lr_gamma)
         
         if cfg.text_encoder_path != '':
@@ -186,6 +202,7 @@ class JoImTeR(object):
 #                                                                                                   ,cfg.TRAIN.SMOOTH.LAMBDA_DAMSM))
         
         best_val_loss = 100000.0
+        
         for epoch in range(start_epoch, self.max_epoch):
             
             ##### set everything to trainable ####
@@ -214,6 +231,8 @@ class JoImTeR(object):
                 
                 y_pred = image_encoder(imgs) # input images to image encoder, feedforward
                 bce_loss = self.criterion(y_pred,classes)
+                bce_loss = bce_loss*self.class_weight_vector
+                bce_loss = bce_loss.mean()
                 total_bce_loss_epoch+=bce_loss.item()
                 
                 bce_loss.backward()
@@ -231,11 +250,13 @@ class JoImTeR(object):
                 pbar.set_description('loss %.5f' % ( float(total_bce_loss_epoch) / (step+1)))
                 ######################################################################################################
                 ##########################################################
-            v_loss = self.evaluate(image_encoder, self.val_batch_size)
+            v_loss, auc_scores = self.evaluate(image_encoder, self.val_batch_size)
             print('[epoch: %d] val_loss: %.4f' % (epoch, v_loss))
             print('-'*80)
             ### val losses ###
-            tbw.add_scalar('Val_step/loss', float(v_loss), epoch)
+            tbw.add_scalar('Val_step/loss', v_loss, epoch)
+            for idx in range(len(auc_scores)):
+                tbw.add_scalar('Val_step/{0}'.format(self.data_loader.dataset.idx_to_class[idx]), auc_scores[idx], epoch)
             
             lr_schedulerI.step()
             end_t = time.time()
@@ -260,16 +281,29 @@ class JoImTeR(object):
         #####################################
         total_bce_loss_epoch=0.0
         val_data_iter = iter(self.dataloader_val)
+        y_preds = []
+        y_trues = []
+        class_auc = []
         for step in tqdm(range(len(val_data_iter)),leave=False):
             real_imgs, classes = val_data_iter.next()
             if cfg.CUDA:
                 real_imgs, classes = real_imgs.cuda(), classes.cuda()
                 
             y_pred = cnn_model(real_imgs)
+            y_pred_sigmoid = torch.sigmoid(y_pred)
+            
             bce_loss = self.criterion(y_pred,classes)
+            bce_loss = bce_loss*self.class_weight_vector
+            bce_loss = bce_loss.mean()
+            
             total_bce_loss_epoch+=bce_loss.item()
-                
-
+            y_preds.append(y_pred_sigmoid.detach().cpu().numpy())  
+            y_trues.append(classes.detach().cpu().numpy())
+        y_preds = np.concatenate(y_preds,axis=0)
+        y_trues = np.concatenate(y_trues,axis=0)
+        
+        for i in range(y_preds.shape[-1]):
+            class_auc.append(roc_auc_score(y_trues[:,i],y_preds[:,i]))
         
         v_cur_loss = total_bce_loss_epoch / (step+1)
-        return v_cur_loss
+        return v_cur_loss, class_auc
