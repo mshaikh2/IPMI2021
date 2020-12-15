@@ -198,9 +198,10 @@ class ImageEncoder(nn.Module):
     
 ################ Transformer: Text Encoder ############
 class ImageEncoder_Classification(nn.Module):
-    def __init__(self,encoder_path=None, pretrained=True, cfg = None):
+    def __init__(self, make_soft_attention = False, freeze_backbone = False, encoder_path=None, pretrained=True, cfg = None):
         super(ImageEncoder_Classification, self).__init__()
         # batchsize, timesteps, 1
+        self.make_soft_attention = make_soft_attention 
         self.pretrained_encoder = ImageEncoder(output_channels=cfg.hidden_dim)
         if pretrained:
             print('Load image encoder from:', encoder_path)
@@ -209,8 +210,11 @@ class ImageEncoder_Classification(nn.Module):
                 self.pretrained_encoder.load_state_dict(state_dict['model'])
             else:
                 self.pretrained_encoder.load_state_dict(state_dict)
-        
-        self.soft_attention = SoftAttention(in_groups=1, m_heads=16, in_channels=512)
+        if freeze_backbone:
+            for param in self.pretrained_encoder.parameters():
+                param.requires_grad = False
+        if self.make_soft_attention:
+            self.soft_attention = SoftAttention(in_groups=1, m_heads=16, in_channels=512)
         
         self.gap = nn.AvgPool2d(kernel_size=16) # gap = GlobalAveragePooling
         self.projection_region = nn.Linear(512, 256)
@@ -225,7 +229,8 @@ class ImageEncoder_Classification(nn.Module):
         
     def forward(self, x):
         f_r, f_g = self.pretrained_encoder(x) # N, 512, 16, 16; N, 512
-        f_r,attn_maps = self.soft_attention(f_r)
+        if self.make_soft_attention:
+            f_r,attn_maps = self.soft_attention(f_r)
         g_p = torch.squeeze(self.gap(f_r)) # N, 512
         f_r = self.relu(self.projection_region(self.do(g_p))) # N, 256
         f_g = self.relu(self.projection_global(self.do(f_g))) # N, 256

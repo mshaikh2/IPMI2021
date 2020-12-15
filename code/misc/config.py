@@ -5,7 +5,7 @@ class Config(object):
         self.CUDA = True
         self.snapshot_interval = 50
         self.text_encoder_path = ''
-        self.CONFIG_NAME = 'classification_sa_ft' #fz #raw
+        self.CONFIG_NAME = 'test_combo.sa_t4.0s0.5.w0.5_d2.0-01.01.02' #fz #raw
         self.DATA_DIR = '../'
         self.TRAIN = True
         self.GPU_ID = 3
@@ -14,13 +14,15 @@ class Config(object):
         self.GAMMA3 = 2.0
         self.sent_margin = 0.5
         self.word_margin = 0.5
-        self.LAMBDA_TRIPLET = 4.0
-        self.LAMBDA_DAMSM = 0.75
+        self.LAMBDA_TRIPLET = 2.0
+        self.LAMBDA_DAMSM = 4.0
         self.clip_max_norm = 1.5
         self.hidden_dropout_prob = 0.5
         self.attention_probs_dropout_prob = 0.1
         self.init_image_encoder_path = '../output/start_point/Model/image_encoder150.pth' # model from only damsm 1,1,2 setting
         self.pretrained = True
+        self.freeze_backbone = False
+        self.make_soft_attention = True
         self.seed = 42
         self.batch_size = 64
         self.val_batch_size = 100

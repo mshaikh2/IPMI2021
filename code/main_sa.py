@@ -2,7 +2,7 @@ from __future__ import print_function
 
 from misc.config import Config
 from dataset import IUDataset, build_dataset
-from trainer_triplet_sa import JoImTeR as trainer
+from trainer_sa import JoImTeR as trainer
 
 import os
 # import os

@@ -333,25 +333,25 @@ class JoImTeR(object):
                 image_encoder.zero_grad() # image/text encoders zero_grad here
                 text_encoder.zero_grad()
                 
-                words_features, sent_code = image_encoder(imgs) # input images to image encoder, feedforward
+                words_features, sent_code, attn_maps_l4, learnable_scalar_l4, attn_maps_l5, learnable_scalar_l5 = image_encoder(imgs) # input images to image encoder, feedforward
                 nef, att_sze = words_features.size(1), words_features.size(2)
                 # hidden = text_encoder.init_hidden(batch_size)
                 # words_embs: batch_size x nef x seq_len
                 # sent_emb: batch_size x nef
                 words_embs, sent_emb = text_encoder(captions, masks) 
                 
-#                 #### damsm losses
-#                 w_loss0, w_loss1, attn_maps = words_loss(words_features, words_embs[:,:,1:], labels, cap_lens-1, class_ids, batch_size)
-#                 w_total_loss0 += w_loss0.item()
-#                 w_total_loss1 += w_loss1.item()
-#                 damsm_loss = w_loss0 + w_loss1
+                #### damsm losses
+                w_loss0, w_loss1, attn_maps = words_loss(words_features, words_embs[:,:,1:], labels, cap_lens-1, class_ids, batch_size)
+                w_total_loss0 += w_loss0.item()
+                w_total_loss1 += w_loss1.item()
+                damsm_loss = w_loss0 + w_loss1
                 
-#                 s_loss0, s_loss1 = sent_loss(sent_code, sent_emb, labels, class_ids, batch_size)
-#                 s_total_loss0 += s_loss0.item()
-#                 s_total_loss1 += s_loss1.item()
-#                 damsm_loss += s_loss0 + s_loss1
+                s_loss0, s_loss1 = sent_loss(sent_code, sent_emb, labels, class_ids, batch_size)
+                s_total_loss0 += s_loss0.item()
+                s_total_loss1 += s_loss1.item()
+                damsm_loss += s_loss0 + s_loss1
                 
-#                 total_damsm_loss += damsm_loss.item()
+                total_damsm_loss += damsm_loss.item()
                 
 #                 #### triplet loss
                 s_t_loss0, s_t_loss1 = sent_triplet_loss(sent_code, sent_emb, labels, neg_ids, batch_size)
@@ -370,7 +370,13 @@ class JoImTeR(object):
                 
                 
 #                 damsm_loss.backward()
-                t_loss.backward()
+#                 t_loss.backward()
+
+                damsm_triplet_combo_loss = cfg.LAMBDA_DAMSM*damsm_loss + cfg.LAMBDA_TRIPLET*t_loss
+                total_combo_loss+=damsm_triplet_combo_loss.item()
+#                 damsm_loss.backward()
+#                 t_loss.backward()
+                damsm_triplet_combo_loss.backward()
     
                 torch.nn.utils.clip_grad_norm_(image_encoder.parameters(), cfg.clip_max_norm)                    
                 optimizerI.step()
@@ -378,12 +384,12 @@ class JoImTeR(object):
                 torch.nn.utils.clip_grad_norm_(text_encoder.parameters(), cfg.clip_max_norm)
                 optimizerT.step()
                 ##################### loss values for each step #########################################
-#                 ## damsm ##
-#                 tbw.add_scalar('Train_step/train_w_step_loss0', float(w_loss0.item()), step + epoch * self.num_batches)
-#                 tbw.add_scalar('Train_step/train_s_step_loss0', float(s_loss0.item()), step + epoch * self.num_batches)
-#                 tbw.add_scalar('Train_step/train_w_step_loss1', float(w_loss1.item()), step + epoch * self.num_batches)
-#                 tbw.add_scalar('Train_step/train_s_step_loss1', float(s_loss1.item()), step + epoch * self.num_batches)
-#                 tbw.add_scalar('Train_step/train_damsm_step_loss', float(damsm_loss.item()), step + epoch * self.num_batches)
+                ## damsm ##
+                tbw.add_scalar('Train_step/train_w_step_loss0', float(w_loss0.item()), step + epoch * self.num_batches)
+                tbw.add_scalar('Train_step/train_s_step_loss0', float(s_loss0.item()), step + epoch * self.num_batches)
+                tbw.add_scalar('Train_step/train_w_step_loss1', float(w_loss1.item()), step + epoch * self.num_batches)
+                tbw.add_scalar('Train_step/train_s_step_loss1', float(s_loss1.item()), step + epoch * self.num_batches)
+                tbw.add_scalar('Train_step/train_damsm_step_loss', float(damsm_loss.item()), step + epoch * self.num_batches)
 
                 ## triplet ##
                 tbw.add_scalar('Train_step/train_w_t_step_loss0', float(w_t_loss0.item()), step + epoch * self.num_batches)
@@ -392,6 +398,9 @@ class JoImTeR(object):
                 tbw.add_scalar('Train_step/train_s_t_step_loss1', float(s_t_loss1.item()), step + epoch * self.num_batches)
                 tbw.add_scalar('Train_step/train_t_step_loss', float(t_loss.item()), step + epoch * self.num_batches)
 
+                tbw.add_scalar('Train_step/attn_scalar_l4', float(learnable_scalar_l4.item()), step + epoch * self.num_batches)
+                tbw.add_scalar('Train_step/attn_scalar_l5', float(learnable_scalar_l5.item()), step + epoch * self.num_batches)
+                
                 ################################################################################################    
                 
                 ############ tqdm descriptions showing running average loss in terminal ##############################
@@ -451,11 +460,11 @@ class JoImTeR(object):
             words_emb, sent_emb = trx_model(captions, masks)
             
             
-#             w_loss0, w_loss1, attn = words_loss(words_features, words_emb[:,:,1:], labels, cap_lens-1, class_ids, batch_size)
-#             w_total_loss += (w_loss0 + w_loss1).data
+            w_loss0, w_loss1, attn = words_loss(words_features, words_emb[:,:,1:], labels, cap_lens-1, class_ids, batch_size)
+            w_total_loss += (w_loss0 + w_loss1).data
 
-#             s_loss0, s_loss1 = sent_loss(sent_code, sent_emb, labels, class_ids, batch_size)
-#             s_total_loss += (s_loss0 + s_loss1).data
+            s_loss0, s_loss1 = sent_loss(sent_code, sent_emb, labels, class_ids, batch_size)
+            s_total_loss += (s_loss0 + s_loss1).data
             
             w_t_loss0, w_t_loss1, _ = words_triplet_loss(words_features, words_emb[:,:,1:], labels, neg_ids, cap_lens-1, batch_size)
             w_t_total_loss += (w_t_loss0 + w_t_loss1).data

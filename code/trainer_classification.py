@@ -72,7 +72,11 @@ class JoImTeR(object):
     def build_models(self):
         # ###################encoders######################################## #
         epoch = 0
-        image_encoder = ImageEncoder_Classification(encoder_path=cfg.init_image_encoder_path, pretrained=cfg.pretrained, cfg = cfg)
+        image_encoder = ImageEncoder_Classification(make_soft_attention = cfg.make_soft_attention
+                                                    , freeze_backbone = cfg.freeze_backbone
+                                                    , encoder_path=cfg.init_image_encoder_path
+                                                    , pretrained=cfg.pretrained
+                                                    , cfg = cfg)
 
         if cfg.text_encoder_path != '':
             img_encoder_path = cfg.text_encoder_path.replace('text_encoder', 'image_encoder')
@@ -84,8 +88,14 @@ class JoImTeR(object):
                 epoch = int(epoch) + 1
             else:
                 image_encoder.load_state_dict(state_dict)
-        for p in image_encoder.parameters(): # make image encoder grad on
-            p.requires_grad = True
+                
+        if cfg.freeze_backbone:
+            for p in image_encoder.pretrained_encoder.parameters(): # make image encoder grad on
+                p.requires_grad = False
+            
+            for n, p in image_encoder.named_parameters():
+                if 'pretrained_encoder' not in n:
+                    p.requires_grad = True
    
         
         # ########################################################### #

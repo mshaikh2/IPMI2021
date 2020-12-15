@@ -44,7 +44,7 @@ class SoftAttention(nn.Module):
         importance = x*attn_maps
         out = x + self.learnable_scalar*importance
 #         print('out.shape:',out)
-        return out
+        return out, attn_maps, self.learnable_scalar
 
 class BasicBlock(nn.Module):
     """
@@ -184,8 +184,9 @@ class ImageEncoder(nn.Module):
         x = self.layer2(x) # batch_size, 32, 128, 128
         x = self.layer3(x) # batch_size, 64, 64, 64
         x = self.layer4(x) # batch_size, 128, 32, 32
-        x = self.soft_attention(x) # batch_size, 128, 32, 32
+        x, attn_maps_l4, learnable_scalar_l4 = self.soft_attention(x) # batch_size, 128, 32, 32
         x = self.layer5(x) # batch_size, 256, 16, 16
+        x, attn_maps_l5, learnable_scalar_l5 = self.soft_attention(x) # batch_size, 128, 16, 16
         region_feat = self.region(x) # batch_size, 512, 16, 16
         x = self.layer6(x) # batch_size, 512, 8, 8
         # x = self.layer7(x) # batch_size, 192, 4, 4
@@ -196,7 +197,7 @@ class ImageEncoder(nn.Module):
         global_feat = self.global_feats(z)
         # outputs += (logits,)
         # outputs += (lowerlevel_img_feat,)
-        return region_feat, global_feat
+        return region_feat, global_feat, attn_maps_l4, learnable_scalar_l4, attn_maps_l5, learnable_scalar_l5
 
 
 ################ Transformer: Text Encoder ############

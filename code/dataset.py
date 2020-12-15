@@ -21,11 +21,11 @@ from transformers import BertTokenizer
 MAX_DIM = 2048
 
 train_transform = tv.transforms.Compose([
-    tv.transforms.RandomRotation(10)
-    ,tv.transforms.RandomCrop(MAX_DIM)
-    ,tv.transforms.ColorJitter(brightness=[0.5, 1.8]
-                              , contrast=[0.5, 1.8]
-                              , saturation=[0.5, 1.8])
+#     tv.transforms.RandomRotation(10)
+    tv.transforms.RandomCrop(MAX_DIM)
+#     ,tv.transforms.ColorJitter(brightness=[0.5, 1.8]
+#                               , contrast=[0.5, 1.8]
+#                               , saturation=[0.5, 1.8])
     ,tv.transforms.ToTensor()
     ,tv.transforms.Normalize(0.5, 0.5)
 ])

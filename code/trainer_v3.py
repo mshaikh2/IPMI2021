@@ -304,6 +304,7 @@ class JoImTeR(object):
             
             total_damsm_loss = 0
             total_t_loss = 0
+            total_combo_loss = 0
                       
             ####### print out lr of each optimizer before training starts, make sure lrs are correct #########
             print('Learning rates: lr_i %.7f, lr_t %.7f' 
@@ -372,6 +373,7 @@ class JoImTeR(object):
                 
                 
                 damsm_triplet_combo_loss = cfg.LAMBDA_DAMSM*damsm_loss + cfg.LAMBDA_TRIPLET*t_loss
+                total_combo_loss+=damsm_triplet_combo_loss.item()
 #                 damsm_loss.backward()
 #                 t_loss.backward()
                 damsm_triplet_combo_loss.backward()
@@ -400,7 +402,7 @@ class JoImTeR(object):
                 
                 ############ tqdm descriptions showing running average loss in terminal ##############################
 #                 pbar.set_description('damsm %.5f' % ( float(total_damsm_loss) / (step+1)))
-                pbar.set_description('combo_loss %.5f' % ( float(damsm_triplet_combo_loss) / (step+1)))
+                pbar.set_description('combo_loss %.5f' % ( float(total_combo_loss) / (step+1)))
                 ######################################################################################################
                 ##########################################################
             v_s_cur_loss, v_w_cur_loss, v_s_t_cur_loss, v_w_t_cur_loss = self.evaluate(image_encoder, text_encoder, self.val_batch_size)
